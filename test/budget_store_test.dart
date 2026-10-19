@@ -91,7 +91,7 @@ void main() {
       expect(added.amount, 12.35);
       expect(added.date, today);
 
-      store.removeExpense(1);
+      store.removeExpenses([1]);
       await Future<void>.delayed(Duration.zero);
 
       expect(notified, 3);
@@ -121,6 +121,32 @@ void main() {
 
       expect(store.addExpenses(const []), isEmpty);
       expect(notified, 1);
+    });
+
+    test('removes several expenses as one change and restores them', () async {
+      final storage = MemoryStorage(expenses: sampleExpenses);
+      final store = await BudgetStore.load(storage, clock: () => today);
+      var notified = 0;
+      store.addListener(() => notified++);
+
+      final removed = store.removeExpenses([2, 8, 99]);
+      await Future<void>.delayed(Duration.zero);
+      expect(removed.map((e) => e.name), ['Phone plan', 'Coffee']);
+      expect(store.thisMonth.expenses, hasLength(6));
+      expect(notified, 1);
+      expect(storage.writes, 1);
+
+      store.restoreExpenses(removed);
+      await Future<void>.delayed(Duration.zero);
+      expect(store.thisMonth.expenses, hasLength(8));
+      expect(store.thisMonth.expenses.first.id, 8);
+      expect(storage.expenses, hasLength(8));
+
+      // Restoring again doesn't duplicate, and removing nothing is no change.
+      store.restoreExpenses(removed);
+      expect(store.removeExpenses(const []), isEmpty);
+      expect(store.expenses, hasLength(8));
+      expect(notified, 2);
     });
 
     test('offers each earlier expense once, most recent first', () {

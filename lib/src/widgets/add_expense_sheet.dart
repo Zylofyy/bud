@@ -356,7 +356,7 @@ class _RepeatOption extends StatelessWidget {
           padding: const EdgeInsets.only(left: 16),
           child: Row(
             children: [
-              _SelectionCircle(selected: selected),
+              SelectionCircle(selected: selected),
               const SizedBox(width: 14),
               Expanded(
                 child: Container(
@@ -392,36 +392,6 @@ class _RepeatOption extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SelectionCircle extends StatelessWidget {
-  const _SelectionCircle({required this.selected});
-
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 24,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: selected ? AppColors.accent : null,
-        border: selected
-            ? null
-            : Border.all(color: AppColors.grabber, width: 1.5),
-      ),
-      child: selected
-          ? const StrokeIcon(
-              AppIcons.check,
-              color: Colors.white,
-              size: Size.square(15),
-              strokeWidth: 3.2,
-            )
-          : null,
     );
   }
 }

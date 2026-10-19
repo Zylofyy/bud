@@ -126,8 +126,29 @@ class BudgetStore extends ChangeNotifier {
     required DateTime date,
   }) => addExpenses([(name: name, amount: amount, date: date)]).single;
 
-  void removeExpense(int id) {
-    _expenses.removeWhere((e) => e.id == id);
+  /// Removes the expenses with [ids] in one change and returns them, so they
+  /// can be put back with [restoreExpenses].
+  List<Expense> removeExpenses(Iterable<int> ids) {
+    final remove = ids.toSet();
+    final removed = [
+      for (final e in _expenses)
+        if (remove.contains(e.id)) e,
+    ];
+    if (removed.isEmpty) return removed;
+    _expenses.removeWhere((e) => remove.contains(e.id));
+    _changed();
+    return removed;
+  }
+
+  /// Puts back expenses taken out by [removeExpenses], keeping their ids.
+  void restoreExpenses(Iterable<Expense> expenses) {
+    final present = {for (final e in _expenses) e.id};
+    final missing = [
+      for (final e in expenses)
+        if (!present.contains(e.id)) e,
+    ];
+    if (missing.isEmpty) return;
+    _expenses.addAll(missing);
     _changed();
   }
 

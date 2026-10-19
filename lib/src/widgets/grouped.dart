@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'stroke_icon.dart';
 
 /// White rounded card that clips ink ripples of the rows inside it.
 class GroupedCard extends StatelessWidget {
@@ -72,3 +73,34 @@ class GroupedRow extends StatelessWidget {
 }
 
 const topHairline = Border(top: BorderSide(color: AppColors.separator));
+
+/// The circle on a selectable row: empty, or filled with a check.
+class SelectionCircle extends StatelessWidget {
+  const SelectionCircle({super.key, required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? AppColors.accent : null,
+        border: selected
+            ? null
+            : Border.all(color: AppColors.grabber, width: 1.5),
+      ),
+      child: selected
+          ? const StrokeIcon(
+              AppIcons.check,
+              color: Colors.white,
+              size: Size.square(15),
+              strokeWidth: 3.2,
+            )
+          : null,
+    );
+  }
+}

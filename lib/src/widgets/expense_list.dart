@@ -5,30 +5,38 @@ import '../models.dart';
 import '../theme.dart';
 import 'grouped.dart';
 
-/// "Expenses · N" with an Edit mode for deleting rows.
+/// "Expenses · N". In Edit mode rows can be selected to delete together.
 class ExpenseList extends StatelessWidget {
   const ExpenseList({
     super.key,
     required this.expenses,
     required this.editing,
-    required this.pendingId,
+    required this.selected,
     required this.onToggleEditing,
-    required this.onTogglePending,
-    required this.onDelete,
+    required this.onToggleSelected,
+    required this.onSelectAll,
+    required this.onLongPress,
   });
 
   /// Newest first.
   final List<Expense> expenses;
   final bool editing;
 
-  /// The row whose Delete button is showing.
-  final int? pendingId;
+  /// Ids of the rows ticked in Edit mode.
+  final Set<int> selected;
   final VoidCallback onToggleEditing;
-  final ValueChanged<int> onTogglePending;
-  final ValueChanged<int> onDelete;
+  final ValueChanged<int> onToggleSelected;
+
+  /// Selects every row, or clears the selection when all are selected.
+  final VoidCallback onSelectAll;
+
+  /// Long-pressing a row outside Edit mode starts it with that row selected.
+  final ValueChanged<int> onLongPress;
 
   @override
   Widget build(BuildContext context) {
+    final allSelected =
+        expenses.isNotEmpty && expenses.every((e) => selected.contains(e.id));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -36,26 +44,24 @@ class ExpenseList extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 44),
           padding: const EdgeInsets.only(left: 16, right: 4),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SectionHeader(
-                'Expenses · ${expenses.length}',
-                padding: EdgeInsets.zero,
-              ),
-              if (expenses.isNotEmpty)
-                TextButton(
-                  onPressed: onToggleEditing,
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(44, 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    foregroundColor: AppColors.accent,
-                    textStyle: AppText.subheadStrong,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(editing ? 'Done' : 'Edit'),
+              Expanded(
+                child: SectionHeader(
+                  'Expenses · ${expenses.length}',
+                  padding: EdgeInsets.zero,
                 ),
+              ),
+              if (expenses.isNotEmpty) ...[
+                if (editing)
+                  _HeaderButton(
+                    label: allSelected ? 'Deselect All' : 'Select All',
+                    onPressed: onSelectAll,
+                  ),
+                _HeaderButton(
+                  label: editing ? 'Done' : 'Edit',
+                  onPressed: onToggleEditing,
+                ),
+              ],
             ],
           ),
         ),
@@ -85,14 +91,36 @@ class ExpenseList extends StatelessWidget {
                     expense: expenses[i],
                     divider: i > 0,
                     editing: editing,
-                    pending: editing && pendingId == expenses[i].id,
-                    onTogglePending: () => onTogglePending(expenses[i].id),
-                    onDelete: () => onDelete(expenses[i].id),
+                    selected: selected.contains(expenses[i].id),
+                    onTap: () => onToggleSelected(expenses[i].id),
+                    onLongPress: () => onLongPress(expenses[i].id),
                   ),
               ],
             ),
           ),
       ],
+    );
+  }
+}
+
+class _HeaderButton extends StatelessWidget {
+  const _HeaderButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(44, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        foregroundColor: AppColors.accent,
+        textStyle: AppText.subheadStrong,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: Text(label),
     );
   }
 }
@@ -103,147 +131,68 @@ class _ExpenseRow extends StatelessWidget {
     required this.expense,
     required this.divider,
     required this.editing,
-    required this.pending,
-    required this.onTogglePending,
-    required this.onDelete,
+    required this.selected,
+    required this.onTap,
+    required this.onLongPress,
   });
 
   final Expense expense;
   final bool divider;
   final bool editing;
-  final bool pending;
-  final VoidCallback onTogglePending;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      // In Edit mode the 44px minus button overhangs the inset by 10px.
-      padding: EdgeInsets.only(left: editing ? 6 : 16),
-      child: Row(
-        children: [
-          if (editing) ...[
-            _MinusButton(
-              label: 'Delete ${expense.name}',
-              selected: pending,
-              onPressed: onTogglePending,
-            ),
-            const SizedBox(width: 4),
-          ],
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 64),
-              padding: const EdgeInsets.fromLTRB(0, 10, 16, 10),
-              decoration: divider
-                  ? const BoxDecoration(border: topHairline)
-                  : null,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: MergeSemantics(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  expense.name,
-                                  style: AppText.body,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 1),
-                                Text(
-                                  shortDate(expense.date),
-                                  style: AppText.subhead,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (!pending) ...[
-                            const SizedBox(width: 10),
-                            Text(
-                              formatMoney(expense.amount),
-                              style: AppText.amount,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (pending) ...[
-                    const SizedBox(width: 10),
-                    FilledButton(
-                      onPressed: onDelete,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.destructive,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(0, 44),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        textStyle: AppText.subheadStrong,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Delete',
-                        semanticsLabel: 'Delete ${expense.name}, confirm',
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The red minus circle shown on each row in Edit mode.
-class _MinusButton extends StatelessWidget {
-  const _MinusButton({
-    required this.label,
-    required this.selected,
-    required this.onPressed,
-  });
-
-  final String label;
   final bool selected;
-  final VoidCallback onPressed;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
-      button: true,
-      selected: selected,
-      label: label,
-      child: InkResponse(
-        onTap: onPressed,
-        radius: 22,
-        child: SizedBox.square(
-          dimension: 44,
-          child: Center(
-            child: Container(
-              width: 22,
-              height: 22,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: AppColors.destructive,
-                shape: BoxShape.circle,
-              ),
-              child: Container(
-                width: 10,
-                height: 2.5,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(2),
+      checked: editing ? selected : null,
+      child: InkWell(
+        onTap: editing ? onTap : null,
+        onLongPress: editing ? null : onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Row(
+            children: [
+              if (editing) ...[
+                SelectionCircle(selected: selected),
+                const SizedBox(width: 14),
+              ],
+              Expanded(
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 64),
+                  padding: const EdgeInsets.fromLTRB(0, 10, 16, 10),
+                  decoration: divider
+                      ? const BoxDecoration(border: topHairline)
+                      : null,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              expense.name,
+                              style: AppText.body,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              shortDate(expense.date),
+                              style: AppText.subhead,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(formatMoney(expense.amount), style: AppText.amount),
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),

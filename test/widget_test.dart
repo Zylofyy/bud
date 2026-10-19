@@ -180,27 +180,99 @@ void main() {
     expect(storage.writes, 0);
   });
 
-  testWidgets('deletes an expense in Edit mode', (tester) async {
+  ButtonStyleButton button(WidgetTester tester, String label) =>
+      tester.widget<ButtonStyleButton>(
+        find.ancestor(
+          of: find.text(label),
+          matching: find.bySubtype<ButtonStyleButton>(),
+        ),
+      );
+
+  testWidgets('deletes several selected expenses, with undo', (tester) async {
     final storage = await pumpApp(tester);
 
     await tester.tap(find.text('Edit'));
     await tester.pumpAndSettle();
-    expect(find.bySemanticsLabel('Delete Coffee'), findsOneWidget);
+    expect(find.text('Add Expense'), findsNothing);
+    expect(button(tester, 'Delete').onPressed, isNull);
 
-    await tester.tap(find.bySemanticsLabel('Delete Coffee'));
-    await tester.pumpAndSettle();
-    expect(find.text(r'$5.80'), findsNothing);
+    await tester.tap(find.text('Coffee'));
+    await tester.tap(find.text('Groceries'));
+    await tester.pump();
+    expect(button(tester, 'Delete 2 Expenses').onPressed, isNotNull);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    // Tapping a selected row deselects it.
+    await tester.tap(find.text('Groceries'));
+    await tester.pump();
+    expect(find.text('Delete 1 Expense'), findsOneWidget);
+    await tester.tap(find.text('Groceries'));
+    await tester.pump();
+
+    await tester.tap(find.text('Delete 2 Expenses'));
     await tester.pumpAndSettle();
 
     expect(find.text('Coffee'), findsNothing);
-    expect(find.text('EXPENSES · 7'), findsOneWidget);
-    expect(storage.expenses.map((e) => e.name), isNot(contains('Coffee')));
+    expect(find.text('Groceries'), findsNothing);
+    expect(find.text('EXPENSES · 6'), findsOneWidget);
+    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Add Expense'), findsOneWidget);
+    expect(find.text('2 expenses deleted'), findsOneWidget);
+    expect(storage.expenses, hasLength(6));
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(find.text('EXPENSES · 8'), findsOneWidget);
+    expect(find.text('Coffee'), findsOneWidget);
+    expect(storage.expenses, hasLength(8));
+  });
+
+  testWidgets('Select All deletes every expense', (tester) async {
+    final storage = await pumpApp(tester);
+
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Select All'));
+    await tester.pump();
+    expect(find.text('Delete 8 Expenses'), findsOneWidget);
+
+    await tester.tap(find.text('Deselect All'));
+    await tester.pump();
+    expect(button(tester, 'Delete').onPressed, isNull);
+
+    await tester.tap(find.text('Select All'));
+    await tester.pump();
+    await tester.tap(find.text('Delete 8 Expenses'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No Expenses'), findsOneWidget);
+    expect(find.text('Edit'), findsNothing);
+    expect(find.text('8 expenses deleted'), findsOneWidget);
+    expect(storage.expenses, isEmpty);
+  });
+
+  testWidgets('long-press starts selecting; Done and Back stop', (
+    tester,
+  ) async {
+    final storage = await pumpApp(tester);
+
+    await tester.longPress(find.text('Coffee'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete 1 Expense'), findsOneWidget);
+    expect(find.text('Done'), findsOneWidget);
 
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
+    expect(find.text('Add Expense'), findsOneWidget);
+
+    await tester.longPress(find.text('Phone plan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete 1 Expense'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
     expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Add Expense'), findsOneWidget);
+    expect(storage.writes, 0);
   });
 
   testWidgets('shows empty states with no expenses', (tester) async {

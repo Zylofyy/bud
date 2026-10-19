@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'budget_store.dart';
 import 'format.dart';
+import 'models.dart';
 import 'theme.dart';
 import 'widgets/add_expense_sheet.dart';
 import 'widgets/expense_list.dart';
@@ -22,7 +23,7 @@ class OverviewScreen extends StatefulWidget {
 class _OverviewScreenState extends State<OverviewScreen>
     with WidgetsBindingObserver {
   bool _editingList = false;
-  int? _pendingDeleteId;
+  final _selectedIds = <int>{};
 
   BudgetStore get _store => widget.store;
 
@@ -46,10 +47,7 @@ class _OverviewScreenState extends State<OverviewScreen>
   }
 
   Future<void> _openSheet(MonthSummary summary) async {
-    setState(() {
-      _editingList = false;
-      _pendingDeleteId = null;
-    });
+    _stopEditing();
     final drafts = await showAddExpenseSheet(
       context,
       initialDate: summary.today,
@@ -60,12 +58,46 @@ class _OverviewScreenState extends State<OverviewScreen>
     if (drafts != null) _store.addExpenses(drafts);
   }
 
-  void _delete(int id) {
-    _store.removeExpense(id);
-    setState(() {
-      _pendingDeleteId = null;
-      if (_store.thisMonth.expenses.isEmpty) _editingList = false;
-    });
+  void _stopEditing() => setState(() {
+    _editingList = false;
+    _selectedIds.clear();
+  });
+
+  void _toggleSelected(int id) => setState(() {
+    if (!_selectedIds.remove(id)) _selectedIds.add(id);
+  });
+
+  void _selectAll(List<Expense> expenses) => setState(() {
+    final ids = {for (final e in expenses) e.id};
+    if (_selectedIds.containsAll(ids)) {
+      _selectedIds.clear();
+    } else {
+      _selectedIds.addAll(ids);
+    }
+  });
+
+  void _deleteSelected() {
+    final removed = _store.removeExpenses(_selectedIds);
+    _stopEditing();
+    if (removed.isEmpty) return;
+    final count = removed.length;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            count == 1 ? '1 expense deleted' : '$count expenses deleted',
+          ),
+          behavior: SnackBarBehavior.floating,
+          // Clear of the Add Expense button.
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+          persist: false,
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () => _store.restoreExpenses(removed),
+          ),
+        ),
+      );
   }
 
   @override
@@ -80,70 +112,88 @@ class _OverviewScreenState extends State<OverviewScreen>
         systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      child: Scaffold(
-        body: ListenableBuilder(
-          listenable: _store,
-          builder: (context, _) {
-            final summary = _store.thisMonth;
-            return Stack(
-              children: [
-                SafeArea(
-                  bottom: false,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _Header(month: monthTitle(summary.today)),
-                      Expanded(
-                        child: ListView(
-                          padding: EdgeInsets.fromLTRB(
-                            16,
-                            0,
-                            16,
-                            124 + bottomPadding,
+      child: PopScope(
+        // Back leaves Edit mode before it leaves the app.
+        canPop: !_editingList,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _stopEditing();
+        },
+        child: Scaffold(
+          body: ListenableBuilder(
+            listenable: _store,
+            builder: (context, _) {
+              final summary = _store.thisMonth;
+              return Stack(
+                children: [
+                  SafeArea(
+                    bottom: false,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _Header(month: monthTitle(summary.today)),
+                        Expanded(
+                          child: ListView(
+                            padding: EdgeInsets.fromLTRB(
+                              16,
+                              0,
+                              16,
+                              124 + bottomPadding,
+                            ),
+                            children: [
+                              SummaryCard(summary: summary),
+                              const SizedBox(height: 28),
+                              MonthSection(
+                                summary: summary,
+                                onBudgetChanged: _store.setBudget,
+                              ),
+                              const SizedBox(height: 28),
+                              ExpenseList(
+                                expenses: summary.expenses,
+                                editing: _editingList,
+                                selected: _selectedIds,
+                                onToggleEditing: _editingList
+                                    ? _stopEditing
+                                    : () => setState(() => _editingList = true),
+                                onToggleSelected: _toggleSelected,
+                                onSelectAll: () => _selectAll(summary.expenses),
+                                onLongPress: (id) => setState(() {
+                                  _editingList = true;
+                                  _selectedIds.add(id);
+                                }),
+                              ),
+                            ],
                           ),
-                          children: [
-                            SummaryCard(summary: summary),
-                            const SizedBox(height: 28),
-                            MonthSection(
-                              summary: summary,
-                              onBudgetChanged: _store.setBudget,
-                            ),
-                            const SizedBox(height: 28),
-                            ExpenseList(
-                              expenses: summary.expenses,
-                              editing: _editingList,
-                              pendingId: _pendingDeleteId,
-                              onToggleEditing: () => setState(() {
-                                _editingList = !_editingList;
-                                _pendingDeleteId = null;
-                              }),
-                              onTogglePending: (id) => setState(() {
-                                _pendingDeleteId = _pendingDeleteId == id
-                                    ? null
-                                    : id;
-                              }),
-                              onDelete: _delete,
-                            ),
-                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (!keyboardOpen)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 24 + bottomPadding,
-                    child: Center(
-                      child: _AddExpenseButton(
-                        onPressed: () => _openSheet(summary),
-                      ),
+                      ],
                     ),
                   ),
-              ],
-            );
-          },
+                  if (!keyboardOpen)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 24 + bottomPadding,
+                      child: Center(
+                        child: _editingList
+                            ? _PillButton(
+                                label: _deleteLabel(_selectedIds.length),
+                                icon: AppIcons.trash,
+                                color: AppColors.destructive,
+                                onPressed: _selectedIds.isEmpty
+                                    ? null
+                                    : _deleteSelected,
+                              )
+                            : _PillButton(
+                                label: 'Add Expense',
+                                icon: AppIcons.plus,
+                                color: AppColors.accent,
+                                onPressed: () => _openSheet(summary),
+                              ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -174,13 +224,31 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _AddExpenseButton extends StatelessWidget {
-  const _AddExpenseButton({required this.onPressed});
+String _deleteLabel(int count) => switch (count) {
+  0 => 'Delete',
+  1 => 'Delete 1 Expense',
+  _ => 'Delete $count Expenses',
+};
 
-  final VoidCallback onPressed;
+/// The floating pill at the bottom: Add Expense, or Delete in Edit mode.
+class _PillButton extends StatelessWidget {
+  const _PillButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final String label;
+  final List<String> icon;
+  final Color color;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final foreground = onPressed == null
+        ? AppColors.disabledLabel
+        : Colors.white;
     return DecoratedBox(
       decoration: const ShapeDecoration(
         shape: StadiumBorder(),
@@ -195,20 +263,22 @@ class _AddExpenseButton extends StatelessWidget {
       child: FilledButton.icon(
         onPressed: onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: Colors.white,
+          backgroundColor: color,
+          foregroundColor: foreground,
+          disabledBackgroundColor: AppColors.buttonFill,
+          disabledForegroundColor: foreground,
           minimumSize: const Size(0, 54),
           padding: const EdgeInsets.symmetric(horizontal: 26),
           shape: const StadiumBorder(),
           textStyle: AppText.headline,
         ),
-        icon: const StrokeIcon(
-          AppIcons.plus,
-          color: Colors.white,
-          size: Size.square(18),
-          strokeWidth: 2.8,
+        icon: StrokeIcon(
+          icon,
+          color: foreground,
+          size: const Size.square(18),
+          strokeWidth: icon == AppIcons.plus ? 2.8 : 2.2,
         ),
-        label: const Text('Add Expense'),
+        label: Text(label),
       ),
     );
   }

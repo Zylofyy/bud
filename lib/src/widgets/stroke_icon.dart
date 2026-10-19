@@ -6,6 +6,13 @@ abstract final class AppIcons {
   static const plus = ['M12 5v14', 'M5 12h14'];
   static const close = ['M6 6l12 12', 'M18 6L6 18'];
   static const check = ['M5 12.5l4.5 4.5L19 7'];
+  static const trash = [
+    'M4 7h16',
+    'M9.5 7V4.5h5V7',
+    'M6.5 7l1 12a2 2 0 0 0 2 1.9h5a2 2 0 0 0 2-1.9l1-12',
+    'M10 11v6',
+    'M14 11v6',
+  ];
 
   /// Drawn in an 8×14 box.
   static const chevron = ['M1 1l6 6-6 6'];
