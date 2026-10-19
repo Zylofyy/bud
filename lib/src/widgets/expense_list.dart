@@ -4,7 +4,6 @@ import '../format.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'grouped.dart';
-import 'stroke_icon.dart';
 
 /// "Expenses · N" with an Edit mode for deleting rows.
 class ExpenseList extends StatelessWidget {
@@ -118,7 +117,6 @@ class _ExpenseRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final category = categoryNamed(expense.category);
     return Padding(
       // In Edit mode the 44px minus button overhangs the inset by 10px.
       padding: EdgeInsets.only(left: editing ? 6 : 16),
@@ -132,15 +130,6 @@ class _ExpenseRow extends StatelessWidget {
             ),
             const SizedBox(width: 4),
           ],
-          IconTile(
-            color: category.color,
-            iconPath: category.iconPath,
-            size: 36,
-            radius: 10,
-            iconSize: 20,
-            strokeWidth: 2.1,
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Container(
               constraints: const BoxConstraints(minHeight: 64),
@@ -166,10 +155,8 @@ class _ExpenseRow extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 1),
                                 Text(
-                                  '${category.name} · ${shortDate(expense.date)}',
+                                  shortDate(expense.date),
                                   style: AppText.subhead,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),

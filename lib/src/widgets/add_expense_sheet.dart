@@ -6,22 +6,19 @@ import '../theme.dart';
 import 'grouped.dart';
 import 'stroke_icon.dart';
 
-typedef NewExpense = ({
-  String name,
-  String category,
-  double amount,
-  DateTime date,
-});
-
 /// Shows the "New Expense" sheet. Dates are limited to [firstDate]–[lastDate].
-Future<NewExpense?> showAddExpenseSheet(
+///
+/// [previous] are earlier expenses the user can tick to add again. Returns
+/// everything to add — the ticked expenses plus the typed one, if any — all
+/// on the chosen date, or null if the sheet was dismissed.
+Future<List<ExpenseDraft>?> showAddExpenseSheet(
   BuildContext context, {
   required DateTime initialDate,
   required DateTime firstDate,
   required DateTime lastDate,
-  String initialCategory = defaultCategory,
+  List<Expense> previous = const [],
 }) {
-  return showModalBottomSheet<NewExpense>(
+  return showModalBottomSheet<List<ExpenseDraft>>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -38,7 +35,7 @@ Future<NewExpense?> showAddExpenseSheet(
       initialDate: initialDate,
       firstDate: firstDate,
       lastDate: lastDate,
-      initialCategory: initialCategory,
+      previous: previous,
     ),
   );
 }
@@ -49,13 +46,13 @@ class AddExpenseSheet extends StatefulWidget {
     required this.initialDate,
     required this.firstDate,
     required this.lastDate,
-    this.initialCategory = defaultCategory,
+    this.previous = const [],
   });
 
   final DateTime initialDate;
   final DateTime firstDate;
   final DateTime lastDate;
-  final String initialCategory;
+  final List<Expense> previous;
 
   @override
   State<AddExpenseSheet> createState() => _AddExpenseSheetState();
@@ -64,13 +61,21 @@ class AddExpenseSheet extends StatefulWidget {
 class _AddExpenseSheetState extends State<AddExpenseSheet> {
   final _amount = TextEditingController();
   final _name = TextEditingController();
-  late String _category = widget.initialCategory;
+  final _selected = <int>{};
   late DateTime _date = widget.initialDate;
 
   double? get _validAmount {
     final v = parseAmount(_amount.text);
     return v != null && v > 0 ? v : null;
   }
+
+  List<ExpenseDraft> get _drafts => [
+    for (final e in widget.previous)
+      if (_selected.contains(e.id))
+        (name: e.name, amount: e.amount, date: _date),
+    if (_validAmount case final amount?)
+      (name: _name.text, amount: amount, date: _date),
+  ];
 
   @override
   void initState() {
@@ -86,15 +91,13 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   }
 
   void _submit() {
-    final amount = _validAmount;
-    if (amount == null) return;
-    Navigator.of(context).pop<NewExpense>((
-      name: _name.text,
-      category: _category,
-      amount: amount,
-      date: _date,
-    ));
+    final drafts = _drafts;
+    if (drafts.isNotEmpty) Navigator.of(context).pop(drafts);
   }
+
+  void _toggle(int id) => setState(() {
+    if (!_selected.remove(id)) _selected.add(id);
+  });
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -108,7 +111,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final canAdd = _validAmount != null;
+    final count = _drafts.length;
+    final canAdd = count > 0;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -158,7 +162,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 ),
                 const SizedBox(width: 8),
                 _CircleButton(
-                  tooltip: 'Add expense',
+                  tooltip: count > 1 ? 'Add $count expenses' : 'Add expense',
                   icon: AppIcons.check,
                   iconSize: 18,
                   strokeWidth: 2.8,
@@ -192,7 +196,6 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                       Expanded(
                         child: TextField(
                           controller: _amount,
-                          autofocus: true,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
@@ -276,23 +279,48 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-            const SectionHeader('Category'),
-            const SizedBox(height: 7),
-            GroupedCard(
-              child: Column(
-                children: [
-                  for (var i = 0; i < categories.length; i++)
-                    _CategoryOption(
-                      category: categories[i],
-                      selected: categories[i].name == _category,
-                      divider: i > 0,
-                      onTap: () =>
-                          setState(() => _category = categories[i].name),
-                    ),
-                ],
+            if (widget.previous.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const SectionHeader('Add Again', padding: EdgeInsets.zero),
+                    if (_selected.isNotEmpty)
+                      Text(
+                        '${_selected.length} selected',
+                        style: AppText.sectionHeader.copyWith(letterSpacing: 0),
+                      ),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: 7),
+              GroupedCard(
+                child: Column(
+                  children: [
+                    for (var i = 0; i < widget.previous.length; i++)
+                      _RepeatOption(
+                        expense: widget.previous[i],
+                        selected: _selected.contains(widget.previous[i].id),
+                        divider: i > 0,
+                        showYear:
+                            widget.previous[i].date.year !=
+                            widget.initialDate.year,
+                        onTap: () => _toggle(widget.previous[i].id),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 7),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Selected expenses are added with the date above.',
+                  style: AppText.caption,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -300,60 +328,62 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   }
 }
 
-class _CategoryOption extends StatelessWidget {
-  const _CategoryOption({
-    required this.category,
+/// An earlier expense with a selection circle, in the "Add Again" list.
+class _RepeatOption extends StatelessWidget {
+  const _RepeatOption({
+    required this.expense,
     required this.selected,
     required this.divider,
+    required this.showYear,
     required this.onTap,
   });
 
-  final Category category;
+  final Expense expense;
   final bool selected;
   final bool divider;
+  final bool showYear;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final date = showYear ? longDate(expense.date) : shortDate(expense.date);
     return Semantics(
       container: true,
-      button: true,
-      selected: selected,
-      inMutuallyExclusiveGroup: true,
+      checked: selected,
       child: InkWell(
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.only(left: 16),
           child: Row(
             children: [
-              IconTile(
-                color: category.color,
-                iconPath: category.iconPath,
-                size: 30,
-                radius: 8,
-                iconSize: 17,
-                strokeWidth: 2.2,
-              ),
-              const SizedBox(width: 12),
+              _SelectionCircle(selected: selected),
+              const SizedBox(width: 14),
               Expanded(
                 child: Container(
-                  constraints: const BoxConstraints(minHeight: 50),
-                  padding: const EdgeInsets.only(right: 16),
+                  constraints: const BoxConstraints(minHeight: 60),
+                  padding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
                   decoration: divider
                       ? const BoxDecoration(border: topHairline)
                       : null,
                   child: Row(
                     children: [
-                      Expanded(child: Text(category.name, style: AppText.body)),
-                      if (selected)
-                        const StrokeIcon(
-                          AppIcons.check,
-                          color: AppColors.accent,
-                          size: Size.square(20),
-                          strokeWidth: 2.6,
-                        )
-                      else
-                        const SizedBox.square(dimension: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              expense.name,
+                              style: AppText.body,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 1),
+                            Text('Last added $date', style: AppText.subhead),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(formatMoney(expense.amount), style: AppText.amount),
                     ],
                   ),
                 ),
@@ -362,6 +392,36 @@ class _CategoryOption extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SelectionCircle extends StatelessWidget {
+  const _SelectionCircle({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? AppColors.accent : null,
+        border: selected
+            ? null
+            : Border.all(color: AppColors.grabber, width: 1.5),
+      ),
+      child: selected
+          ? const StrokeIcon(
+              AppIcons.check,
+              color: Colors.white,
+              size: Size.square(15),
+              strokeWidth: 3.2,
+            )
+          : null,
     );
   }
 }

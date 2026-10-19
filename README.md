@@ -7,11 +7,12 @@ A monthly budget tracker for Android, built with Flutter from the
   are), a progress ring, the daily allowance for the rest of the month and the
   days left.
 - **Monthly budget**: tap the row to edit it in place.
-- **Spending by category**: a stacked bar and a per-category legend.
 - **Expenses**: newest first. Tap **Edit**, then a row's red minus, then
   **Delete** to remove it.
-- **Add Expense**: a bottom sheet for the amount, an optional description, the
-  date (within the current month) and the category.
+- **Add Expense**: a bottom sheet for the amount, an optional description and
+  the date (within the current month). Its **Add Again** list shows earlier
+  expenses, one per name and amount; tick as many as you like and they're
+  added on the chosen date, along with the typed expense if there is one.
 
 The budget and expenses are saved on the device with `shared_preferences`. The
 overview shows the current calendar month; expenses from earlier months are
@@ -49,14 +50,13 @@ lib/
   main.dart                      app entry, loads saved data
   src/
     theme.dart                   colors and text styles from the design
-    models.dart                  categories and the Expense model
+    models.dart                  the Expense model
     format.dart                  money and date formatting, amount input
     budget_store.dart            state, month summary and persistence
     overview_screen.dart         the main screen
     widgets/
       summary_card.dart          left to spend + progress ring
       month_section.dart         monthly budget, daily allowance, days left
-      category_breakdown.dart    stacked bar and legend
       expense_list.dart          expense rows and Edit mode
       add_expense_sheet.dart     the New Expense sheet
       grouped.dart               card, section header and row building blocks

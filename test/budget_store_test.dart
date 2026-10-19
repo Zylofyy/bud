@@ -1,9 +1,11 @@
+import 'dart:convert';
+
 import 'package:bud/src/budget_store.dart';
 import 'package:bud/src/models.dart';
-import 'package:bud/src/widgets/category_breakdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
+import 'package:shared_preferences_platform_interface/types.dart';
 
 import 'support.dart';
 
@@ -22,19 +24,6 @@ void main() {
         'Groceries',
         'Dinner with friends',
       ]);
-      expect(
-        [
-          for (final t in s.categoryTotals)
-            '${t.category.name} ${t.total} ${t.shareLabel}',
-        ],
-        [
-          'Housing 900.0 65%',
-          'Food 156.4 11%',
-          'Transport 30.0 2%',
-          'Bills 177.75 13%',
-          'Fun 120.0 9%',
-        ],
-      );
     });
 
     test('over budget', () {
@@ -55,17 +44,10 @@ void main() {
       final s = MonthSummary.of(
         [
           ...sampleExpenses,
-          Expense(
-            id: 9,
-            name: 'Old',
-            category: 'Fun',
-            amount: 50,
-            date: DateTime(2026, 9, 30),
-          ),
+          Expense(id: 9, name: 'Old', amount: 50, date: DateTime(2026, 9, 30)),
           Expense(
             id: 10,
             name: 'Last year',
-            category: 'Fun',
             amount: 50,
             date: DateTime(2025, 10, 12),
           ),
@@ -85,24 +67,6 @@ void main() {
       expect(daysLeft(DateTime(2028, 2, 1)), 29);
       expect(daysLeft(DateTime(2026, 12, 15)), 17);
     });
-
-    test('a tiny category shows <1%', () {
-      final s = MonthSummary.of(
-        [
-          Expense(
-            id: 1,
-            name: 'Rent',
-            category: 'Housing',
-            amount: 1000,
-            date: today,
-          ),
-          Expense(id: 2, name: 'Gum', category: 'Food', amount: 1, date: today),
-        ],
-        budget: 2000,
-        today: today,
-      );
-      expect(s.categoryTotals.last.shareLabel, '<1%');
-    });
   });
 
   group('BudgetStore', () {
@@ -120,11 +84,10 @@ void main() {
 
       final added = store.addExpense(
         name: '  ',
-        category: 'Transport',
         amount: 12.345,
         date: DateTime(2026, 10, 12, 18, 30),
       );
-      expect(added.name, 'Transport');
+      expect(added.name, 'Expense');
       expect(added.amount, 12.35);
       expect(added.date, today);
 
@@ -135,59 +98,119 @@ void main() {
       expect(storage.writes, 3);
       expect(storage.budget, 1200.46);
       expect(storage.expenses.map((e) => e.id), isNot(contains(1)));
-      expect(storage.expenses.last.name, 'Transport');
+      expect(storage.expenses.last.name, 'Expense');
+    });
+
+    test('adds several expenses as one change with unique ids', () async {
+      final storage = MemoryStorage();
+      final store = BudgetStore(storage: storage, clock: () => today);
+      var notified = 0;
+      store.addListener(() => notified++);
+
+      final added = store.addExpenses([
+        (name: 'Rent share', amount: 900, date: today),
+        (name: 'Phone plan', amount: 35, date: today),
+        (name: 'Coffee', amount: 5.8, date: today),
+      ]);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(added.map((e) => e.id).toSet(), hasLength(3));
+      expect(notified, 1);
+      expect(storage.writes, 1);
+      expect(store.thisMonth.spent, 940.8);
+
+      expect(store.addExpenses(const []), isEmpty);
+      expect(notified, 1);
+    });
+
+    test('offers each earlier expense once, most recent first', () {
+      final store = BudgetStore(
+        storage: MemoryStorage(),
+        expenses: [
+          ...sampleExpenses,
+          Expense(
+            id: 20,
+            name: 'Coffee',
+            amount: 5.8,
+            date: DateTime(2026, 10, 2),
+          ),
+          Expense(
+            id: 21,
+            name: 'coffee',
+            amount: 4.5,
+            date: DateTime(2026, 9, 28),
+          ),
+          Expense(
+            id: 22,
+            name: 'Rent share',
+            amount: 900,
+            date: DateTime(2026, 9, 1),
+          ),
+        ],
+        clock: () => today,
+      );
+      final repeatable = store.repeatable;
+      expect(repeatable.map((e) => '${e.name} ${e.amount}'), [
+        'Coffee 5.8',
+        'Groceries 86.4',
+        'Dinner with friends 64.2',
+        'Transit card top-up 30.0',
+        'Concert tickets 120.0',
+        'Electricity & internet 142.75',
+        'Phone plan 35.0',
+        'Rent share 900.0',
+        'coffee 4.5',
+      ]);
+      // The latest Coffee and Rent share, not the older copies.
+      expect(repeatable.first.id, 8);
+      expect(repeatable[7].id, 1);
     });
 
     test('starts with the default budget and no expenses', () async {
       final store = await BudgetStore.load(MemoryStorage(), clock: () => today);
       expect(store.budget, 2400);
       expect(store.expenses, isEmpty);
-    });
-
-    test('ids stay unique when added in the same instant', () {
-      final store = BudgetStore(storage: MemoryStorage(), clock: () => today);
-      final a = store.addExpense(
-        name: 'a',
-        category: 'Food',
-        amount: 1,
-        date: today,
-      );
-      final b = store.addExpense(
-        name: 'b',
-        category: 'Food',
-        amount: 1,
-        date: today,
-      );
-      expect(a.id, isNot(b.id));
+      expect(store.repeatable, isEmpty);
     });
   });
 
-  test('PrefsBudgetStorage round-trips through shared preferences', () async {
-    SharedPreferencesAsyncPlatform.instance =
-        InMemorySharedPreferencesAsync.empty();
-    final storage = PrefsBudgetStorage();
-    expect((await storage.read()).budget, isNull);
-
-    await storage.write(1234.5, sampleExpenses);
-    final read = await storage.read();
-    expect(read.budget, 1234.5);
-    expect(read.expenses, hasLength(8));
-    final electricity = read.expenses[2];
-    expect(electricity.name, 'Electricity & internet');
-    expect(electricity.category, 'Bills');
-    expect(electricity.amount, 142.75);
-    expect(electricity.date, DateTime(2026, 10, 5));
-  });
-
-  group('segmentWidths', () {
-    test('splits proportionally', () {
-      expect(segmentWidths([1, 3], 100), [25, 75]);
+  group('PrefsBudgetStorage', () {
+    setUp(() {
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.empty();
     });
 
-    test('keeps tiny segments visible', () {
-      final w = segmentWidths([1000, 1], 104);
-      expect(w[1], 4);
-      expect(w[0], 100);
+    test('round-trips through shared preferences', () async {
+      final storage = PrefsBudgetStorage();
+      expect((await storage.read()).budget, isNull);
+
+      await storage.write(1234.5, sampleExpenses);
+      final read = await storage.read();
+      expect(read.budget, 1234.5);
+      expect(read.expenses, hasLength(8));
+      final electricity = read.expenses[2];
+      expect(electricity.name, 'Electricity & internet');
+      expect(electricity.amount, 142.75);
+      expect(electricity.date, DateTime(2026, 10, 5));
+    });
+
+    test('reads expenses saved with categories by 0.1.0', () async {
+      await SharedPreferencesAsyncPlatform.instance!.setString(
+        'expenses',
+        jsonEncode([
+          {
+            'id': 1,
+            'name': 'Rent share',
+            'cat': 'Housing',
+            'amount': 900,
+            'date': '2026-10-01',
+          },
+        ]),
+        const SharedPreferencesOptions(),
+      );
+      final read = await PrefsBudgetStorage().read();
+      expect(read.expenses.single.name, 'Rent share');
+      expect(read.expenses.single.amount, 900);
     });
   });
 }

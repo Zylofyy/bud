@@ -43,10 +43,10 @@ void main() {
     expect(find.text(r'$2,400.00'), findsOneWidget);
     expect(find.text(r'$50.79'), findsOneWidget);
     expect(find.text('20'), findsOneWidget);
-    expect(find.text(r'$900.00 · 65%'), findsOneWidget);
+    expect(find.text('SPENDING BY CATEGORY'), findsNothing);
     expect(find.text('EXPENSES · 8'), findsOneWidget);
     expect(find.text('Electricity & internet'), findsOneWidget);
-    expect(find.text('Bills · 5 Oct'), findsOneWidget);
+    expect(find.text('5 Oct'), findsOneWidget);
   });
 
   testWidgets('editing the budget can put the month over budget', (
@@ -100,8 +100,7 @@ void main() {
 
     await tester.enterText(inSheet(find.byType(TextField)).first, '12.5');
     await tester.enterText(inSheet(find.byType(TextField)).last, 'Taxi');
-    await tester.tap(inSheet(find.text('Transport')));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(addButton().onPressed, isNotNull);
 
     await tester.tap(find.byTooltip('Add expense'));
@@ -110,10 +109,61 @@ void main() {
     expect(find.text('New Expense'), findsNothing);
     expect(find.text('Taxi'), findsOneWidget);
     expect(find.text(r'$12.50'), findsOneWidget);
-    expect(find.text('Transport · 12 Oct'), findsOneWidget);
+    expect(find.text('12 Oct'), findsNWidgets(2)); // Taxi and Coffee
     expect(find.text('EXPENSES · 9'), findsOneWidget);
     expect(find.text(r'$1,003.35'), findsOneWidget);
     expect(storage.expenses, hasLength(9));
+  });
+
+  testWidgets('adds several earlier expenses again', (tester) async {
+    final storage = await pumpApp(tester);
+
+    await tester.tap(find.text('Add Expense'));
+    await tester.pumpAndSettle();
+    expect(find.text('ADD AGAIN'), findsOneWidget);
+    expect(inSheet(find.text('Last added 3 Oct')), findsOneWidget);
+
+    await tester.tap(inSheet(find.text('Phone plan')));
+    await tester.tap(inSheet(find.text('Coffee')));
+    await tester.tap(inSheet(find.text('Groceries')));
+    await tester.pump();
+    expect(find.text('3 selected'), findsOneWidget);
+
+    // Tapping again deselects.
+    await tester.tap(inSheet(find.text('Groceries')));
+    await tester.pump();
+    expect(find.text('2 selected'), findsOneWidget);
+    expect(find.byTooltip('Add 2 expenses'), findsOneWidget);
+
+    // A typed expense is added along with the selected ones.
+    await tester.enterText(inSheet(find.byType(TextField)).first, '7');
+    await tester.pump();
+    await tester.tap(find.byTooltip('Add 3 expenses'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('New Expense'), findsNothing);
+    expect(find.text('EXPENSES · 11'), findsOneWidget);
+    expect(find.text('Phone plan'), findsNWidgets(2));
+    expect(find.text('Coffee'), findsNWidgets(2));
+    expect(find.text('12 Oct'), findsNWidgets(4));
+    expect(find.text(r'Spent $1,431.95 of $2,400.00'), findsOneWidget);
+    expect(
+      storage.expenses.skip(8).map((e) => '${e.name} ${e.amount} ${e.date}'),
+      [
+        'Coffee 5.8 2026-10-12 00:00:00.000',
+        'Phone plan 35.0 2026-10-12 00:00:00.000',
+        'Expense 7.0 2026-10-12 00:00:00.000',
+      ],
+    );
+  });
+
+  testWidgets('the sheet has nothing to add again at first', (tester) async {
+    await pumpApp(tester, expenses: const []);
+
+    await tester.tap(find.text('Add Expense'));
+    await tester.pumpAndSettle();
+    expect(find.text('New Expense'), findsOneWidget);
+    expect(find.text('ADD AGAIN'), findsNothing);
   });
 
   testWidgets('cancelling the sheet adds nothing', (tester) async {
@@ -157,10 +207,6 @@ void main() {
     await pumpApp(tester, expenses: const []);
 
     expect(find.text('No Expenses'), findsOneWidget);
-    expect(
-      find.text('Add an expense to see where your money goes.'),
-      findsOneWidget,
-    );
     expect(find.text('Edit'), findsNothing);
     expect(find.text(r'$2,400.00'), findsNWidgets(2));
     expect(find.text('0%'), findsOneWidget);

@@ -3,10 +3,8 @@ import 'package:flutter/services.dart';
 
 import 'budget_store.dart';
 import 'format.dart';
-import 'models.dart';
 import 'theme.dart';
 import 'widgets/add_expense_sheet.dart';
-import 'widgets/category_breakdown.dart';
 import 'widgets/expense_list.dart';
 import 'widgets/month_section.dart';
 import 'widgets/stroke_icon.dart';
@@ -25,7 +23,6 @@ class _OverviewScreenState extends State<OverviewScreen>
     with WidgetsBindingObserver {
   bool _editingList = false;
   int? _pendingDeleteId;
-  String _lastCategory = defaultCategory;
 
   BudgetStore get _store => widget.store;
 
@@ -53,21 +50,14 @@ class _OverviewScreenState extends State<OverviewScreen>
       _editingList = false;
       _pendingDeleteId = null;
     });
-    final result = await showAddExpenseSheet(
+    final drafts = await showAddExpenseSheet(
       context,
       initialDate: summary.today,
       firstDate: summary.firstDay,
       lastDate: summary.lastDay,
-      initialCategory: _lastCategory,
+      previous: _store.repeatable,
     );
-    if (result == null) return;
-    _lastCategory = result.category;
-    _store.addExpense(
-      name: result.name,
-      category: result.category,
-      amount: result.amount,
-      date: result.date,
-    );
+    if (drafts != null) _store.addExpenses(drafts);
   }
 
   void _delete(int id) {
@@ -118,8 +108,6 @@ class _OverviewScreenState extends State<OverviewScreen>
                               summary: summary,
                               onBudgetChanged: _store.setBudget,
                             ),
-                            const SizedBox(height: 28),
-                            CategoryBreakdown(totals: summary.categoryTotals),
                             const SizedBox(height: 28),
                             ExpenseList(
                               expenses: summary.expenses,

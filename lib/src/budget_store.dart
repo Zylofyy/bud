@@ -78,6 +78,7 @@ class BudgetStore extends ChangeNotifier {
   final DateTime Function() _clock;
   double _budget;
   final List<Expense> _expenses;
+  int _lastId = 0;
 
   double get budget => _budget;
   List<Expense> get expenses => List.unmodifiable(_expenses);
@@ -86,29 +87,44 @@ class BudgetStore extends ChangeNotifier {
   MonthSummary get thisMonth =>
       MonthSummary.of(_expenses, budget: _budget, today: today);
 
+  /// Expenses to offer for adding again: one per name and amount, most
+  /// recently logged first.
+  List<Expense> get repeatable {
+    final seen = <String>{};
+    return [
+      for (final e in newestFirst(_expenses))
+        if (seen.add('${e.name.toLowerCase()}|${e.amount.toStringAsFixed(2)}'))
+          e,
+    ];
+  }
+
   void setBudget(double value) {
     _budget = roundCents(value);
     _changed();
   }
 
+  /// Adds every draft in one change; blank names become [unnamedExpense].
+  List<Expense> addExpenses(Iterable<ExpenseDraft> drafts) {
+    final added = [
+      for (final d in drafts)
+        Expense(
+          id: _nextId(),
+          name: d.name.trim().isEmpty ? unnamedExpense : d.name.trim(),
+          amount: roundCents(d.amount),
+          date: dateOnly(d.date),
+        ),
+    ];
+    if (added.isEmpty) return added;
+    _expenses.addAll(added);
+    _changed();
+    return added;
+  }
+
   Expense addExpense({
     required String name,
-    required String category,
     required double amount,
     required DateTime date,
-  }) {
-    final trimmed = name.trim();
-    final expense = Expense(
-      id: _nextId(),
-      name: trimmed.isEmpty ? category : trimmed,
-      category: category,
-      amount: roundCents(amount),
-      date: dateOnly(date),
-    );
-    _expenses.add(expense);
-    _changed();
-    return expense;
-  }
+  }) => addExpenses([(name: name, amount: amount, date: date)]).single;
 
   void removeExpense(int id) {
     _expenses.removeWhere((e) => e.id == id);
@@ -117,8 +133,11 @@ class BudgetStore extends ChangeNotifier {
 
   int _nextId() {
     final now = _clock().microsecondsSinceEpoch;
-    final maxId = _expenses.fold(0, (m, e) => math.max(m, e.id));
-    return math.max(now, maxId + 1);
+    final maxId = math.max(
+      _lastId,
+      _expenses.fold(0, (m, e) => math.max(m, e.id)),
+    );
+    return _lastId = math.max(now, maxId + 1);
   }
 
   void _changed() {
@@ -129,18 +148,6 @@ class BudgetStore extends ChangeNotifier {
   }
 }
 
-class CategoryTotal {
-  const CategoryTotal(this.category, this.total, this.share);
-
-  final Category category;
-  final double total;
-
-  /// Percentage of the month's spending, 0–100.
-  final double share;
-
-  String get shareLabel => share > 0 && share < 1 ? '<1%' : '${share.round()}%';
-}
-
 /// Everything the overview shows for the month containing [today].
 class MonthSummary {
   MonthSummary._({
@@ -148,7 +155,6 @@ class MonthSummary {
     required this.budget,
     required this.expenses,
     required this.spent,
-    required this.categoryTotals,
   });
 
   factory MonthSummary.of(
@@ -156,36 +162,18 @@ class MonthSummary {
     required double budget,
     required DateTime today,
   }) {
-    final expenses =
-        all
-            .where(
-              (e) => e.date.year == today.year && e.date.month == today.month,
-            )
-            .toList()
-          ..sort((a, b) {
-            final byDate = b.date.compareTo(a.date);
-            return byDate != 0 ? byDate : b.id.compareTo(a.id);
-          });
-    final spent = roundCents(expenses.fold(0.0, (sum, e) => sum + e.amount));
-    final totals = <CategoryTotal>[
-      for (final c in categories)
-        if (_sum(expenses, c.name) case final t when t > 0)
-          CategoryTotal(c, t, spent > 0 ? t / spent * 100 : 0),
-    ];
+    final expenses = newestFirst(
+      all.where(
+        (e) => e.date.year == today.year && e.date.month == today.month,
+      ),
+    );
     return MonthSummary._(
       today: today,
       budget: budget,
       expenses: expenses,
-      spent: spent,
-      categoryTotals: totals,
+      spent: roundCents(expenses.fold(0.0, (sum, e) => sum + e.amount)),
     );
   }
-
-  static double _sum(List<Expense> expenses, String category) => roundCents(
-    expenses
-        .where((e) => categoryNamed(e.category).name == category)
-        .fold(0.0, (sum, e) => sum + e.amount),
-  );
 
   final DateTime today;
   final double budget;
@@ -193,7 +181,6 @@ class MonthSummary {
   /// Newest first.
   final List<Expense> expenses;
   final double spent;
-  final List<CategoryTotal> categoryTotals;
 
   DateTime get firstDay => DateTime(today.year, today.month);
   DateTime get lastDay => DateTime(today.year, today.month + 1, 0);
@@ -209,3 +196,10 @@ class MonthSummary {
 
   double get dailyAllowance => math.max(0, left) / daysLeft;
 }
+
+/// Sorted by date, newest first; the later-logged first within a day.
+List<Expense> newestFirst(Iterable<Expense> expenses) =>
+    expenses.toList()..sort((a, b) {
+      final byDate = b.date.compareTo(a.date);
+      return byDate != 0 ? byDate : b.id.compareTo(a.id);
+    });
