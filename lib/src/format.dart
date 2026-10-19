@@ -33,6 +33,20 @@ String longDate(DateTime d) => '${shortDate(d)} ${d.year}';
 /// `October 2026`
 String monthTitle(DateTime d) => '${_months[d.month - 1]} ${d.year}';
 
+/// `2nd`, `3rd`, `11th`, `21st`
+String ordinal(int n) {
+  final suffix = switch (n % 100) {
+    11 || 12 || 13 => 'th',
+    _ => switch (n % 10) {
+      1 => 'st',
+      2 => 'nd',
+      3 => 'rd',
+      _ => 'th',
+    },
+  };
+  return '$n$suffix';
+}
+
 /// `2026-10-12`
 String isoDate(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-'

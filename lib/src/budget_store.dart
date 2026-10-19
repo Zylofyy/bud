@@ -93,8 +93,7 @@ class BudgetStore extends ChangeNotifier {
     final seen = <String>{};
     return [
       for (final e in newestFirst(_expenses))
-        if (seen.add('${e.name.toLowerCase()}|${e.amount.toStringAsFixed(2)}'))
-          e,
+        if (seen.add(sameExpenseKey(e))) e,
     ];
   }
 
@@ -176,6 +175,7 @@ class MonthSummary {
     required this.budget,
     required this.expenses,
     required this.spent,
+    required this.occurrences,
   });
 
   factory MonthSummary.of(
@@ -188,11 +188,19 @@ class MonthSummary {
         (e) => e.date.year == today.year && e.date.month == today.month,
       ),
     );
+    // Number each expense among those with the same name and amount, in the
+    // order they were logged (ids only grow), across every month.
+    final counts = <String, int>{};
+    final occurrences = <int, int>{
+      for (final e in all.toList()..sort((a, b) => a.id.compareTo(b.id)))
+        e.id: counts.update(sameExpenseKey(e), (n) => n + 1, ifAbsent: () => 1),
+    };
     return MonthSummary._(
       today: today,
       budget: budget,
       expenses: expenses,
       spent: roundCents(expenses.fold(0.0, (sum, e) => sum + e.amount)),
+      occurrences: occurrences,
     );
   }
 
@@ -202,6 +210,11 @@ class MonthSummary {
   /// Newest first.
   final List<Expense> expenses;
   final double spent;
+  final Map<int, int> occurrences;
+
+  /// 1 for the first expense with its name and amount, 2 for the second
+  /// logged, and so on.
+  int occurrenceOf(Expense e) => occurrences[e.id] ?? 1;
 
   DateTime get firstDay => DateTime(today.year, today.month);
   DateTime get lastDay => DateTime(today.year, today.month + 1, 0);
@@ -217,6 +230,11 @@ class MonthSummary {
 
   double get dailyAllowance => math.max(0, left) / daysLeft;
 }
+
+/// Expenses with the same name (ignoring case) and amount count as the same
+/// expense logged again.
+String sameExpenseKey(Expense e) =>
+    '${e.name.toLowerCase()}|${e.amount.toStringAsFixed(2)}';
 
 /// Sorted by date, newest first; the later-logged first within a day.
 List<Expense> newestFirst(Iterable<Expense> expenses) =>

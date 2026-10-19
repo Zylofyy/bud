@@ -11,6 +11,9 @@ A monthly budget tracker for Android, built with Flutter from the
   expenses, use **Select All** if you like, then **Delete** removes them all at
   once. **Undo** in the message that follows puts them back. Back or **Done**
   leaves selection without deleting anything.
+- **Repeat labels**: an expense with the same name and amount as an earlier one
+  is marked **2x**, **3x** and so on, in the order they were logged, across all
+  months. The first one has no label.
 - **Add Expense**: a bottom sheet for the amount, an optional description and
   the date (within the current month). Its **Add Again** list shows earlier
   expenses, one per name and amount; tick as many as you like and they're

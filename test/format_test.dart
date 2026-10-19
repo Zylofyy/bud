@@ -18,6 +18,23 @@ void main() {
     expect(isoDate(d), '2026-10-02');
   });
 
+  test('ordinal', () {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 112].map(ordinal), [
+      '1st',
+      '2nd',
+      '3rd',
+      '4th',
+      '11th',
+      '12th',
+      '13th',
+      '21st',
+      '22nd',
+      '23rd',
+      '101st',
+      '112th',
+    ]);
+  });
+
   test('parseAmount and editableAmount', () {
     expect(parseAmount(''), isNull);
     expect(parseAmount('.'), isNull);

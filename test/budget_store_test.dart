@@ -59,6 +59,49 @@ void main() {
       expect(s.spent, 1384.15);
     });
 
+    test('numbers expenses logged again with the same name and amount', () {
+      final all = [
+        Expense(
+          id: 0,
+          name: 'Phone plan',
+          amount: 35,
+          date: DateTime(2026, 9, 3),
+        ),
+        ...sampleExpenses,
+        Expense(
+          id: 20,
+          name: 'Coffee',
+          amount: 5.8,
+          date: DateTime(2026, 10, 13),
+        ),
+        // Logged after the others but dated earlier: still the third.
+        Expense(
+          id: 21,
+          name: 'coffee',
+          amount: 5.8,
+          date: DateTime(2026, 10, 2),
+        ),
+        Expense(id: 22, name: 'Coffee', amount: 4.5, date: today),
+      ];
+      int occurrence(List<Expense> all, int id) => MonthSummary.of(
+        all,
+        budget: 2400,
+        today: today,
+      ).occurrenceOf(all.firstWhere((e) => e.id == id));
+
+      expect(occurrence(all, 8), 1);
+      expect(occurrence(all, 20), 2);
+      expect(occurrence(all, 21), 3);
+      expect(occurrence(all, 22), 1); // different amount
+      expect(occurrence(all, 1), 1);
+      expect(occurrence(all, 2), 2); // September's counts too
+
+      // Without the first Coffee, the copies move up one.
+      final withoutFirst = [...all]..removeWhere((e) => e.id == 8);
+      expect(occurrence(withoutFirst, 20), 1);
+      expect(occurrence(withoutFirst, 21), 2);
+    });
+
     test('days left includes today and handles month lengths', () {
       int daysLeft(DateTime d) =>
           MonthSummary.of(const [], budget: 1, today: d).daysLeft;

@@ -151,6 +151,7 @@ class _OverviewScreenState extends State<OverviewScreen>
                                 expenses: summary.expenses,
                                 editing: _editingList,
                                 selected: _selectedIds,
+                                occurrenceOf: summary.occurrenceOf,
                                 onToggleEditing: _editingList
                                     ? _stopEditing
                                     : () => setState(() => _editingList = true),

@@ -157,6 +157,43 @@ void main() {
     );
   });
 
+  testWidgets('labels expenses added again 2x, 3x', (tester) async {
+    await pumpApp(tester);
+    expect(find.textContaining(RegExp(r'^\d+x$')), findsNothing);
+
+    Future<void> addAgain(String name) async {
+      await tester.tap(find.text('Add Expense'));
+      await tester.pumpAndSettle();
+      await tester.tap(inSheet(find.text(name)));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Add expense'));
+      await tester.pumpAndSettle();
+    }
+
+    await addAgain('Coffee');
+    expect(find.text('2x'), findsOneWidget);
+    await addAgain('Coffee');
+    expect(find.text('Coffee'), findsNWidgets(3));
+    expect(find.text('2x'), findsOneWidget);
+    expect(find.text('3x'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('3rd time')), findsOneWidget);
+
+    // Newest first: 3x, then 2x, then the original with no label.
+    double top(Finder f) => tester.getTopLeft(f).dy;
+    expect(top(find.text('3x')), lessThan(top(find.text('2x'))));
+    expect(top(find.text('2x')), lessThan(top(find.text('Coffee').last)));
+
+    // Deleting the original moves the copies up one.
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Coffee').last);
+    await tester.pump();
+    await tester.tap(find.text('Delete 1 Expense'));
+    await tester.pumpAndSettle();
+    expect(find.text('3x'), findsNothing);
+    expect(find.text('2x'), findsOneWidget);
+  });
+
   testWidgets('the sheet has nothing to add again at first', (tester) async {
     await pumpApp(tester, expenses: const []);
 

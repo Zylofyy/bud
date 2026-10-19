@@ -12,6 +12,7 @@ class ExpenseList extends StatelessWidget {
     required this.expenses,
     required this.editing,
     required this.selected,
+    required this.occurrenceOf,
     required this.onToggleEditing,
     required this.onToggleSelected,
     required this.onSelectAll,
@@ -24,6 +25,9 @@ class ExpenseList extends StatelessWidget {
 
   /// Ids of the rows ticked in Edit mode.
   final Set<int> selected;
+
+  /// Which time an expense with this name and amount was logged: 2 shows "2x".
+  final int Function(Expense) occurrenceOf;
   final VoidCallback onToggleEditing;
   final ValueChanged<int> onToggleSelected;
 
@@ -89,6 +93,7 @@ class ExpenseList extends StatelessWidget {
                   _ExpenseRow(
                     key: ValueKey(expenses[i].id),
                     expense: expenses[i],
+                    occurrence: occurrenceOf(expenses[i]),
                     divider: i > 0,
                     editing: editing,
                     selected: selected.contains(expenses[i].id),
@@ -129,6 +134,7 @@ class _ExpenseRow extends StatelessWidget {
   const _ExpenseRow({
     super.key,
     required this.expense,
+    required this.occurrence,
     required this.divider,
     required this.editing,
     required this.selected,
@@ -137,6 +143,7 @@ class _ExpenseRow extends StatelessWidget {
   });
 
   final Expense expense;
+  final int occurrence;
   final bool divider;
   final bool editing;
   final bool selected;
@@ -172,11 +179,21 @@ class _ExpenseRow extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              expense.name,
-                              style: AppText.body,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    expense.name,
+                                    style: AppText.body,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (occurrence > 1) ...[
+                                  const SizedBox(width: 8),
+                                  _RepeatBadge(occurrence),
+                                ],
+                              ],
                             ),
                             const SizedBox(height: 1),
                             Text(
@@ -194,6 +211,32 @@ class _ExpenseRow extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "2x", "3x"… on an expense logged again.
+class _RepeatBadge extends StatelessWidget {
+  const _RepeatBadge(this.occurrence);
+
+  final int occurrence;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        '${occurrence}x',
+        semanticsLabel: '${ordinal(occurrence)} time',
+        style: AppText.caption.copyWith(
+          color: AppColors.accent,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
