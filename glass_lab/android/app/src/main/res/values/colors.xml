@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the app's background so launch has no flash. -->
+    <color name="background">#ECEEF2</color>
+    <color name="ic_launcher_background">#1C2447</color>
+</resources>

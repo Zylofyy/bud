@@ -3,6 +3,9 @@
 A monthly budget tracker for Android, built with Flutter from the
 [Budget App UI](https://claude.ai/artifact/VZCi1TD1i4cM2P4CproCf9) design.
 
+This repo also holds [Glass Lab](glass_lab/), a separate Flutter app: the
+Liquid Glass Morph Lab's three iOS 26 glass morphs, rebuilt as live shaders.
+
 - **Overview**: how much is left to spend this month (or how far over budget you
   are), a progress ring, the daily allowance for the rest of the month and the
   days left.

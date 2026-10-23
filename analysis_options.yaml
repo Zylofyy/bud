@@ -4,3 +4,4 @@ analyzer:
   exclude:
     - build/**
     - android/**
+    - glass_lab/**
